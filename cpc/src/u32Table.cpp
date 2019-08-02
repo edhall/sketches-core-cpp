@@ -1,6 +1,20 @@
 /*
- * Copyright 2018, Oath Inc. Licensed under the terms of the
- * Apache License 2.0. See LICENSE file at the project root for terms.
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
  */
 
 // author Kevin Lang, Oath Research
@@ -63,7 +77,7 @@ void u32TableFree (u32Table * self) {
 void u32TableShow (u32Table * self) {
   Long tableSize = 1LL << self->lgSize;
   printf ("\nu32Table (%d valid bits; %lld of %lld slots occupied)\n",
-	  self->validBits, self->numItems, tableSize);
+	  self->validBits, (long long int) self->numItems, (long long int) tableSize);
   //  U32 * arr = self->slots;
   //  Long i;
   //  for (i = 0; i < tableSize; i++) {
@@ -87,7 +101,7 @@ void u32TableClear (u32Table * self) { // clear the table without resizing it
 
 void printU32Array (U32 * array, Long arrayLength) {
   Long i = 0;
-  printf ("\nu32Array [%lld]\n", arrayLength);
+  printf ("\nu32Array [%lld]\n", (long long int) arrayLength);
   for (i = 0; i < arrayLength; i++) {
     printf ("%d:\t%8X\n", (int) i, array[i]);    
   }

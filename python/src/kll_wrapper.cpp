@@ -1,118 +1,99 @@
 /*
- * Copyright 2019, Oath Inc. Licensed under the terms of the
- * Apache License 2.0. See LICENSE file at the project root for terms.
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
  */
 
 #include "kll_sketch.hpp"
-#include <boost/python.hpp>
 
-namespace bpy = boost::python;
+#include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
+#include <sstream>
+
+namespace py = pybind11;
 
 namespace datasketches {
 namespace python {
 
 template<typename T>
-kll_sketch<T>* KllSketch_deserialize(bpy::object obj) {
-  PyObject* skBytes = obj.ptr();
-  if (!PyBytes_Check(skBytes)) {
-    PyErr_SetString(PyExc_TypeError, "Attmpted to deserialize non-bytes object");
-    bpy::throw_error_already_set();
-    return nullptr;
-  }
-  
-  size_t len = PyBytes_GET_SIZE(skBytes);
-  char* sketchImg = PyBytes_AS_STRING(skBytes);
-  auto sk = kll_sketch<T>::deserialize(sketchImg, len);
-  return sk.release();
+kll_sketch<T> kll_sketch_deserialize(py::bytes skBytes) {
+  std::string skStr = skBytes; // implicit cast  
+  return kll_sketch<T>::deserialize(skStr.c_str(), skStr.length());
 }
 
 template<typename T>
-bpy::object KllSketch_serialize(const kll_sketch<T>& sk) {
+py::object kll_sketch_serialize(const kll_sketch<T>& sk) {
   auto serResult = sk.serialize();
-  PyObject* sketchBytes = PyBytes_FromStringAndSize((char*)serResult.first.get(), serResult.second);
-  return bpy::object{bpy::handle<>(sketchBytes)};
+  return py::bytes((char*)serResult.first.get(), serResult.second);
 }
 
+// maybe possible to disambiguate the static vs method rank error calls, but
+// this is easier for now
 template<typename T>
-double KllSketch_sketchNormalizedRankError(const kll_sketch<T>& sk,
-                                           bool pmf) {
-  return sk.get_normalized_rank_error(pmf);
-}
-
-template<typename T>
-double KllSketch_generalNormalizedRankError(uint16_t k, bool pmf) {
+double kll_sketch_generic_normalized_rank_error(uint16_t k, bool pmf) {
   return kll_sketch<T>::get_normalized_rank_error(k, pmf);
 }
 
 template<typename T>
-bpy::list KllSketch_getQuantiles(const kll_sketch<T>& sk,
-                                 bpy::list& fractions) {
-  size_t nQuantiles = len(fractions);
-  double* frac = new double[nQuantiles];
+py::list kll_sketch_get_quantiles(const kll_sketch<T>& sk,
+                                std::vector<double>& fractions) {
+  size_t nQuantiles = fractions.size();
+  auto result = sk.get_quantiles(&fractions[0], nQuantiles);
+
+  // returning as std::vector<> would copy values to a list anyway
+  py::list list(nQuantiles);
   for (int i = 0; i < nQuantiles; ++i) {
-    frac[i] = bpy::extract<double>(fractions[i]);
-  }
-  std::unique_ptr<T[]> result = sk.get_quantiles(frac, nQuantiles);
-
-  PyObject* list = PyList_New(nQuantiles);
-  for (int i = 0; i < nQuantiles; ++i) {
-    if (std::is_same<T, int>::value)        
-      PyList_SET_ITEM(list, i, PyLong_FromLong(result[i]));
-    else if (std::is_same<T, float>::value)
-      PyList_SET_ITEM(list, i, PyFloat_FromDouble(result[i]));
+      list[i] = result[i];
   }
 
-  delete [] frac;
-  return bpy::list{bpy::handle<>(list)};
+  return list;
 }
 
 template<typename T>
-bpy::list KllSketch_getPMF(const kll_sketch<T>& sk,
-                           bpy::list& split_points) {
-  size_t nPoints = len(split_points);
-  T* splitPoints = new T[nPoints];
-  for (int i = 0; i < nPoints; ++i) {
-    splitPoints[i] = bpy::extract<T>(split_points[i]);
-  }
-  std::unique_ptr<double[]> result = sk.get_PMF(splitPoints, nPoints);
+py::list kll_sketch_get_pmf(const kll_sketch<T>& sk,
+                          std::vector<T>& split_points) {
+  size_t nPoints = split_points.size();
+  auto result = sk.get_PMF(&split_points[0], nPoints);
 
-  PyObject* pmf = PyList_New(nPoints);
+  py::list list(nPoints);
   for (int i = 0; i < nPoints; ++i) {
-    PyList_SET_ITEM(pmf, i, PyFloat_FromDouble(result[i]));
+    list[i] = result[i];
   }
 
-  delete [] splitPoints;
-  return bpy::list{bpy::handle<>(pmf)};
+  return list;
 }
 
 template<typename T>
-bpy::list KllSketch_getCDF(const kll_sketch<T>& sk,
-                           bpy::list& split_points) {
-  size_t nPoints = len(split_points);
-  T* splitPoints = new T[nPoints];
-  for (int i = 0; i < nPoints; ++i) {
-    splitPoints[i] = bpy::extract<T>(split_points[i]);
-  }
-  std::unique_ptr<double[]> result = sk.get_CDF(splitPoints, nPoints);
+py::list kll_sketch_get_cdf(const kll_sketch<T>& sk,
+                          std::vector<T>& split_points) {
+  size_t nPoints = split_points.size();
+  auto result = sk.get_CDF(&split_points[0], nPoints);
 
-  PyObject* cdf = PyList_New(nPoints);
+  py::list list(nPoints);
   for (int i = 0; i < nPoints; ++i) {
-    PyList_SET_ITEM(cdf, i, PyFloat_FromDouble(result[i]));
+    list[i] = result[i];
   }
 
-  delete [] splitPoints;
-  return bpy::list{bpy::handle<>(cdf)};
+  return list;
 }
 
 template<typename T>
-uint32_t KllSketch_getSerializedSizeBytes(const kll_sketch<T>& sk) {
-  return sk.get_serialized_size_bytes();
-}
-
-template<typename T>
-std::string KllSketch_toString(const kll_sketch<T>& sk) {
+std::string kll_sketch_to_string(const kll_sketch<T>& sk) {
   std::ostringstream ss;
-  ss << sk;
+  sk.to_stream(ss);
   return ss.str();
 }
 
@@ -122,42 +103,38 @@ std::string KllSketch_toString(const kll_sketch<T>& sk) {
 namespace dspy = datasketches::python;
 
 template<typename T>
-void bind_kll_sketch(const char* name)
-{
+void bind_kll_sketch(py::module &m, const char* name) {
   using namespace datasketches;
 
-  bpy::class_<kll_sketch<T>, boost::noncopyable>(name, bpy::init<uint16_t>())
-    .def(bpy::init<const kll_sketch<T>&>())
-    .def("update", &kll_sketch<T>::update)
-    .def("merge", &kll_sketch<T>::merge)
-    .def("__str__", &dspy::KllSketch_toString<T>)
-    .def("isEmpty", &kll_sketch<T>::is_empty)
-    .def("getN", &kll_sketch<T>::get_n)
-    .def("getNumRetained", &kll_sketch<T>::get_num_retained)
-    .def("isEstimationMode", &kll_sketch<T>::is_estimation_mode)
-    .def("getMinValue", &kll_sketch<T>::get_min_value)
-    .def("getMaxValue", &kll_sketch<T>::get_max_value)
-    .def("getQuantile", &kll_sketch<T>::get_quantile)
-    .def("getQuantiles", &dspy::KllSketch_getQuantiles<T>)
-    .def("getRank", &kll_sketch<T>::get_rank)
-    .def("getPMF", &dspy::KllSketch_getPMF<T>)
-    .def("getCDF", &dspy::KllSketch_getCDF<T>)
-    .def("normalizedRankError", &dspy::KllSketch_sketchNormalizedRankError<T>)
-    .def("getNormalizedRankError", &dspy::KllSketch_generalNormalizedRankError<T>)
-    .staticmethod("getNormalizedRankError")
-    .def("getSerializedSizeBytes", &dspy::KllSketch_getSerializedSizeBytes<T>)
-    .def("getSizeofItem", &kll_sketch<T>::get_sizeof_item)
-    .staticmethod("getSizeofItem")
-    .def("getMaxSerializedSizeBytes", &kll_sketch<T>::get_max_serialized_size_bytes)
-    .staticmethod("getMaxSerializedSizeBytes")
-    .def("serialize", &dspy::KllSketch_serialize<T>)
-    .def("deserialize", &dspy::KllSketch_deserialize<T>, bpy::return_value_policy<bpy::manage_new_object>())
-    .staticmethod("deserialize")   
+  py::class_<kll_sketch<T>>(m, name)
+    .def(py::init<uint16_t>(), py::arg("k"))
+    .def(py::init<const kll_sketch<T>&>())
+    .def("update", (void (kll_sketch<T>::*)(const T&)) &kll_sketch<T>::update, py::arg("item"))
+    .def("merge", &kll_sketch<T>::merge, py::arg("sketch"))
+    .def("__str__", &dspy::kll_sketch_to_string<T>)
+    .def("is_empty", &kll_sketch<T>::is_empty)
+    .def("get_n", &kll_sketch<T>::get_n)
+    .def("get_num_retained", &kll_sketch<T>::get_num_retained)
+    .def("is_estimation_mode", &kll_sketch<T>::is_estimation_mode)
+    .def("get_min_value", &kll_sketch<T>::get_min_value)
+    .def("get_max_value", &kll_sketch<T>::get_max_value)
+    .def("get_quantile", &kll_sketch<T>::get_quantile, py::arg("fraction"))
+    .def("get_quantiles", &dspy::kll_sketch_get_quantiles<T>, py::arg("fractions"))
+    .def("get_rank", &kll_sketch<T>::get_rank, py::arg("value"))
+    .def("get_pmf", &dspy::kll_sketch_get_pmf<T>, py::arg("split_points"))
+    .def("get_cdf", &dspy::kll_sketch_get_cdf<T>, py::arg("split_points"))
+    .def("normalized_rank_error", (double (kll_sketch<T>::*)(bool) const) &kll_sketch<T>::get_normalized_rank_error,
+         py::arg("as_pmf"))
+    .def_static("get_normalized_rank_error", &dspy::kll_sketch_generic_normalized_rank_error<T>,
+         py::arg("k"), py::arg("as_pmf"))
+    // can't yet get this one to work
+    //.def("get_serialized_size_bytes", &kll_sketch<T>::get_serialized_size_bytes)
+    .def("serialize", &dspy::kll_sketch_serialize<T>)
+    .def_static("deserialize", &dspy::kll_sketch_deserialize<T>)
     ;
 }
 
-void export_kll()
-{
-  bind_kll_sketch<int>("KllIntSketch");
-  bind_kll_sketch<float>("KllFloatSketch");
+void init_kll(py::module &m) {
+  bind_kll_sketch<int>(m, "kll_ints_sketch");
+  bind_kll_sketch<float>(m, "kll_floats_sketch");
 }

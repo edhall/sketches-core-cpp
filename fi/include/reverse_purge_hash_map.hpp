@@ -1,6 +1,20 @@
 /*
- * Copyright 2019, Verizon Media.
- * Licensed under the terms of the Apache License 2.0. See LICENSE file at the project root for terms.
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
  */
 
 #ifndef REVERSE_PURGE_HASH_MAP_HPP_
@@ -27,7 +41,7 @@ class reverse_purge_hash_map {
 public:
   reverse_purge_hash_map(uint8_t lg_size, uint8_t lg_max_size);
   reverse_purge_hash_map(const reverse_purge_hash_map& other);
-  reverse_purge_hash_map(reverse_purge_hash_map&& other) noexcept ;
+  reverse_purge_hash_map(reverse_purge_hash_map&& other) noexcept;
   ~reverse_purge_hash_map();
   reverse_purge_hash_map& operator=(reverse_purge_hash_map other);
   reverse_purge_hash_map& operator=(reverse_purge_hash_map&& other);
@@ -58,7 +72,7 @@ private:
   void hash_delete(uint32_t probe);
   uint32_t internal_adjust_or_insert(const T& key, uint64_t value);
   uint64_t resize_or_purge_if_needed();
-  void resize(uint8_t new_lg_size);
+  void resize(uint8_t lg_new_size);
   uint64_t purge();
 };
 
@@ -85,7 +99,7 @@ public:
   const_iterator operator++(int) { const_iterator tmp(*this); operator++(); return tmp; }
   bool operator==(const const_iterator& rhs) const { return count == rhs.count; }
   bool operator!=(const const_iterator& rhs) const { return count != rhs.count; }
-  const std::pair<const T&, const uint64_t> operator*() {
+  const std::pair<const T&, const uint64_t> operator*() const {
     return std::pair<const T&, const uint64_t>(map->keys[index], map->values[index]);
   }
 private:
@@ -358,18 +372,18 @@ uint64_t reverse_purge_hash_map<T, H, E, A>::resize_or_purge_if_needed() {
 }
 
 template<typename T, typename H, typename E, typename A>
-void reverse_purge_hash_map<T, H, E, A>::resize(uint8_t new_lg_size) {
+void reverse_purge_hash_map<T, H, E, A>::resize(uint8_t lg_new_size) {
   const uint32_t old_size = 1 << lg_cur_size;
   T* old_keys = keys;
   uint64_t* old_values = values;
   uint16_t* old_states = states;
-  const uint32_t new_size = 1 << new_lg_size;
+  const uint32_t new_size = 1 << lg_new_size;
   keys = A().allocate(new_size);
   values = AllocU64().allocate(new_size);
   states = AllocU16().allocate(new_size);
   std::fill(states, &states[new_size], 0);
   num_active = 0;
-  lg_cur_size = new_lg_size;
+  lg_cur_size = lg_new_size;
   for (uint32_t i = 0; i < old_size; i++) {
     if (old_states[i] > 0) {
       adjust_or_insert(std::move(old_keys[i]), old_values[i]);
